@@ -221,8 +221,6 @@ def template2(sentence, words, buySet, outputJson, nerDict):
   outputJson: output for task 3
   nerDict: named entity dictionary ex: nerDict['GPE'] = set("Texas")
 
-  
-
   nsubj is the subject of the word. Its headword is a verb.
   aux is an auxiliary word. Its headword is a verb.
   dobj is the direct object of the verb. Its headword is a verb.
@@ -238,7 +236,7 @@ def template2(sentence, words, buySet, outputJson, nerDict):
         rootVerb = words[i].text
         break
     
-    print(words[i].text, words[i].tag_, words[i].head.text, words[i].dep_)
+    #print(words[i].text, words[i].tag_, words[i].head.text, words[i].dep_)
   
   if found is True:
     output = {}
