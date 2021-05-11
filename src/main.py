@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1s3I1b-clzUhg9EhXGgWqxw1R39H0K0eD
 """
 
-# import packages, download wordbank, documentation resources
+########### import packages, download wordbank, documentation resources ###############
 import nltk.data
 import nltk
 import spacy
@@ -58,7 +58,7 @@ format:
 
 def initializeBornVerb():
   # bear
-  wordList = ["created", "founded", "born", "constructed"]
+  wordList = ["creat", "found", "born", "construct"]
 
   bornSet = set()
   
@@ -70,19 +70,6 @@ def initializeBornVerb():
         #print(word, "has synonyms " ,lemma.name())
 
   return bornSet
-
-def initializeMonthSet():
-  monthSet = set()
-
-  wordList = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-  
-  for word in wordList:
-    monthSet.add(word)    
-    for synset in wn.synsets(word):
-      for lemma in synset.lemmas():
-        monthSet.add(lemma.name())
-        #print(word, "has synonyms " ,lemma.name())
-  return monthSet
 
 def template1(sentence, words, bornSet, outputJson, nerDict):
   """
@@ -122,7 +109,7 @@ def template1(sentence, words, bornSet, outputJson, nerDict):
   rootVerb = ""
   for i in range(0, len(words)):
     if words[i].text == words[i].head.text:
-      if words[i].text in bornSet and (words[i].tag_ == "VBN" or words[i].tag_ == "VBD"):
+      if (words[i].text in bornSet or words[i].lemma_ in bornSet) and (words[i].tag_ == "VBN" or words[i].tag_ == "VBD"):
         print("BORN template was found!")
         found = True
         rootVerb = words[i].text
@@ -224,19 +211,43 @@ def template2(sentence, words, buySet, outputJson, nerDict):
   nsubj is the subject of the word. Its headword is a verb.
   aux is an auxiliary word. Its headword is a verb.
   dobj is the direct object of the verb. Its headword is a verb.
+
+  Named Entity Set: {'DATE': {'2017'}, 'ORG': {'Amazon'}, 'PRODUCT': {'Whole Foods Market'}, 'MONEY': {'US$13.4 billion'}}
+  In IN acquired prep
+  2017 CD In pobj
+  , , acquired punct
+  Amazon NNP acquired nsubj
+  acquired VBD acquired ROOT
+  Whole NNP Market compound
+  Foods NNPS Market compound
+  Market NNP acquired dobj
+  for IN acquired prep
+  US$ $ billion quantmod
+  13.4 CD billion compound
+  billion CD for pobj
+  . . acquired punct
+
+  Whole Whole NNP Market compound
+  Foods Foods NNPS Market compound
+  Market Market NNP acquired nsubjpass
+  was be VBD acquired auxpass
+  BUY template was found!
+  acquired acquire VBN acquired ROOT
+  by by IN acquired agent
+  Amazon Amazon NNP by pobj
   """
   
   found = False
   rootVerb = ""
   for i in range(0, len(words)):
     if words[i].text == words[i].head.text:
-      if words[i].text in buySet and (words[i].tag_ == "VBN" or words[i].tag_ == "VBD" or words[i].tag_ == "VB"):
+      if (words[i].text in buySet or words[i].lemma_ in buySet) and (words[i].tag_ == "VBN" or words[i].tag_ == "VBD" or words[i].tag_ == "VB"):
         print("BUY template was found!")
         found = True
         rootVerb = words[i].text
         break
     
-    #print(words[i].text, words[i].tag_, words[i].head.text, words[i].dep_)
+    #print(words[i].text, words[i].lemma_, words[i].tag_, words[i].head.text, words[i].dep_)
   
   if found is True:
     output = {}
@@ -244,11 +255,42 @@ def template2(sentence, words, buySet, outputJson, nerDict):
     output["sentences"] = words
     output["arguments"] = {}
 
-    comp_1 = ""
-    comp_2 = ""
+    organization = ""
     i = 0
+    while i < len(words):
+      if i > 1 and words[i-1].text == "by" and words[i-1].head.text == rootVerb and words[i].dep == spacy.symbols.pobj and words[i].head.text == "by" and words[i].tag_ == "NNP":
+        # check if in nerDict
+        output["arguments"]["1"] = words[i].text
 
+      elif words[i].dep == spacy.symbols.nsubj and words[i].head.text == rootVerb and words[i].tag_ == "NNP":
+        # check if in nerDict
+        output["arguments"]["1"] = words[i].text
 
+      elif (words[i].dep == spacy.symbols.nsubjpass or words[i].dep == spacy.symbols.dobj) and words[i].head.text == rootVerb and words[i].tag_ == "NNP":
+        # locate it in NER 'ORG'/'PRODUCT' and find possible compound
+        if 'ORG' in nerDict.keys():
+          for ent in nerDict['ORG']:
+            nerComps = ent.split()
+            for nerComp in nerComps:
+              if words[i].text == nerComp:
+                organization = ent
+                break
+
+        if 'PRODUCT' in nerDict.keys():
+          for ent in nerDict['PRODUCT']:
+            nerComps = ent.split()
+            for nerComp in nerComps:
+              if words[i].text == nerComp:
+                organization = ent
+                break
+          
+        output["arguments"]["2"] = organization
+      
+      i += 1
+    
+    if len(nerDict['DATE']) == 1:
+      dateList = list(nerDict['DATE'])
+      output["arguments"]["3"] = dateList[0]
 
     outputJson["extraction"].append(output)
     return outputJson
@@ -278,7 +320,8 @@ text = "Amazon was founded by Jeff Bezos in Bellevue, Washington, in July 1994. 
 #text += "Jeff Bezos founded Amazon in Bellevue, Washington, in July 1994. "
 #text = "Jason was born in Richardson, Texas on Jan 20 1994. "
 #text = "in Bellevue, Washington"
-text += "In 2017, Amazon acquired Whole Foods Market for US$13.4 billion, which vastly increased Amazon's presence as a brick-and-mortar retailer."
+text += "In 2017, Amazon acquired Whole Foods Market for US$13.4 billion, which vastly increased Amazon's presence as a brick-and-mortar retailer. "
+text += "In 2017, Whole Foods Market was acquired by Amazon for US$13.4 billion."
 
 ##################  Load function for task 1  #################
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -353,7 +396,7 @@ for sentence in sentences:
   print("Named Entity Set:", nerDict)
 
   #### matching templates ####
-  template1(sentence, words, bornSet, outputJson, nerDict)
+  #template1(sentence, words, bornSet, outputJson, nerDict)
   template2(sentence, words, buySet, outputJson, nerDict)
 
   ########### Output for task 1  ##############
