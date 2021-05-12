@@ -40,21 +40,9 @@ nltk.download('wordnet')
 nltk.download('averaged_perceptron_tagger')
 NER = en_core_web_sm.load()
 
-############# Template 1 ##################
-"""
-Heuristic method
-e.g. Words after lemmatized become [born, create, invent, ...] should be considered template 1
-format: 
-{
-  "template": "BORN",
-  "sentences": [ "Amazon was founded by Jeff Bezos in Bellevue, Washington, in July 1994."],
-  "arguments": {
-    "1": "Amazon",
-    "2": "July 1994",
-    "3": "Bellevue, Washington",
-  }
-}
-"""
+import json
+
+#################### Help function for task 2 ######################
 
 def initializeBornVerb():
   # bear
@@ -70,6 +58,96 @@ def initializeBornVerb():
         #print(word, "has synonyms " ,lemma.name())
 
   return bornSet
+
+def findWordInNer(word, nerDict):
+  # locate it in NER 'ORG'/'PRODUCT' and find possible compound
+  organization = ""
+
+  if 'ORG' in nerDict.keys():
+    for ent in nerDict['ORG']:
+      nerComps = ent.split()
+      for nerComp in nerComps:
+        if word.text == nerComp:
+          organization = ent
+          return organization
+
+  if 'PRODUCT' in nerDict.keys():
+    for ent in nerDict['PRODUCT']:
+      nerComps = ent.split()
+      for nerComp in nerComps:
+        if word.text == nerComp:
+          organization = ent
+          return organization
+  
+  return organization
+
+def temp1FindWordInNer(word, nerDict):
+  # locate it in NER 'ORG'/'PRODUCT' and find possible compound
+  res = ""
+
+  if 'ORG' in nerDict.keys():
+    for ent in nerDict['ORG']:
+      nerComps = ent.split()
+      for nerComp in nerComps:
+        if word.text == nerComp:
+          res = ent
+          return res
+
+  if 'PRODUCT' in nerDict.keys():
+    for ent in nerDict['PRODUCT']:
+      nerComps = ent.split()
+      for nerComp in nerComps:
+        if word.text == nerComp:
+          res = ent
+          return res
+  
+  if 'PERSON' in nerDict.keys():
+    for ent in nerDict['PERSON']:
+      nerComps = ent.split()
+      for nerComp in nerComps:
+        if word.text == nerComp:
+          res = ent
+          return res
+
+  if 'NORP' in nerDict.keys():
+    for ent in nerDict['NORP']:
+      nerComps = ent.split()
+      for nerComp in nerComps:
+        if word.text == nerComp:
+          res = ent
+          return res
+  return res
+
+def initializeBuyVerb():
+  # bear
+  wordList = ["buy", "acquire"]
+
+  buySet = set()
+  
+  for word in wordList:
+    buySet.add(word)    
+    for synset in wn.synsets(word):
+      for lemma in synset.lemmas():
+        buySet.add(lemma.name())
+        #print(word, "has synonyms " ,lemma.name())
+
+  return buySet
+
+############# Template 1 ##################
+"""
+Heuristic method
+e.g. Words after lemmatized become [born, create, invent, ...] should be considered template 1
+format: 
+{
+  "template": "BORN",
+  "sentences": [ "Amazon was founded by Jeff Bezos in Bellevue, Washington, in July 1994."],
+  "arguments": {
+    "1": "Amazon",
+    "2": "July 1994",
+    "3": "Bellevue, Washington",
+  }
+}
+"""
 
 def template1(sentence, words, bornSet, outputJson, nerDict):
   """
@@ -120,22 +198,23 @@ def template1(sentence, words, bornSet, outputJson, nerDict):
   if found is True:
     output = {}
     output["template"] = "BORN"
-    output["sentences"] = words
+    output["sentences"] = sentence
     output["arguments"] = {}
 
     places = GeoText(sentence)
     #print(places.country_mentions)
     cities = set(places.cities)
-    print("Cities mentioned:", cities)
+    #print("Cities mentioned:", cities)
     
     space = ""
     i = 0
     while i < len(words):
       
       if (words[i].dep == spacy.symbols.nsubjpass or words[i].dep == spacy.symbols.dobj) and words[i].head.text == rootVerb and words[i].tag_ == "NNP":
-        output["arguments"]["1"] = words[i].text
+        
+        output["arguments"]["1"] = temp1FindWordInNer(words[i], nerDict)
 
-      elif words[i-1].tag_ == "IN" and words[i].text in nerDict['GPE'] and words[i].text in cities:
+      elif 'GPE' in nerDict.keys() and words[i-1].tag_ == "IN" and words[i].text in nerDict['GPE'] and words[i].text in cities:
         space += words[i].text
         link = words[i].text
         i += 1
@@ -150,15 +229,16 @@ def template1(sentence, words, bornSet, outputJson, nerDict):
 
       i += 1
     
-    if len(nerDict['DATE']) == 1:
-      dateList = list(nerDict['DATE'])
-      output["arguments"]["2"] = dateList[0]
-    else:
-      dates = extract_dates(text)
-      #timestampStr = dates[0].strftime("%b %d %Y")
-      timestampStr = dates[0].strftime("%H:%M:%S.%f - %b %d %Y")
-      # '00:00:00.000000 - Jan 20 1994'
-      output["arguments"]["2"] = timestampStr
+    if 'DATE' in nerDict.keys():
+      if len(nerDict['DATE']) == 1:
+        dateList = list(nerDict['DATE'])
+        output["arguments"]["2"] = dateList[0]
+      """else:
+        dates = extract_dates(text)
+        #timestampStr = dates[0].strftime("%b %d %Y")
+        timestampStr = dates[0].strftime("%H:%M:%S.%f - %b %d %Y")
+        # '00:00:00.000000 - Jan 20 1994'
+        output["arguments"]["2"] = timestampStr"""
 
     output["arguments"]["3"] = space
 
@@ -184,21 +264,6 @@ format:
   }
 }
 """
-
-def initializeBuyVerb():
-  # bear
-  wordList = ["buy", "acquire"]
-
-  buySet = set()
-  
-  for word in wordList:
-    buySet.add(word)    
-    for synset in wn.synsets(word):
-      for lemma in synset.lemmas():
-        buySet.add(lemma.name())
-        #print(word, "has synonyms " ,lemma.name())
-
-  return buySet
 
 def template2(sentence, words, buySet, outputJson, nerDict):
   """
@@ -252,45 +317,37 @@ def template2(sentence, words, buySet, outputJson, nerDict):
   if found is True:
     output = {}
     output["template"] = "BUY"
-    output["sentences"] = words
+    output["sentences"] = sentence
     output["arguments"] = {}
 
-    organization = ""
+    organization_1 = ""
+    organization_2 = ""
     i = 0
     while i < len(words):
+      
       if i > 1 and words[i-1].text == "by" and words[i-1].head.text == rootVerb and words[i].dep == spacy.symbols.pobj and words[i].head.text == "by" and words[i].tag_ == "NNP":
-        # check if in nerDict
-        output["arguments"]["1"] = words[i].text
+        # locate it in nerDict
+        organization_1 = findWordInNer(words[i], nerDict)
+
+        output["arguments"]["1"] = organization_1
 
       elif words[i].dep == spacy.symbols.nsubj and words[i].head.text == rootVerb and words[i].tag_ == "NNP":
-        # check if in nerDict
-        output["arguments"]["1"] = words[i].text
+        # locate it in nerDict
+        organization_1 = findWordInNer(words[i], nerDict)
+
+        output["arguments"]["1"] = organization_1
 
       elif (words[i].dep == spacy.symbols.nsubjpass or words[i].dep == spacy.symbols.dobj) and words[i].head.text == rootVerb and words[i].tag_ == "NNP":
-        # locate it in NER 'ORG'/'PRODUCT' and find possible compound
-        if 'ORG' in nerDict.keys():
-          for ent in nerDict['ORG']:
-            nerComps = ent.split()
-            for nerComp in nerComps:
-              if words[i].text == nerComp:
-                organization = ent
-                break
-
-        if 'PRODUCT' in nerDict.keys():
-          for ent in nerDict['PRODUCT']:
-            nerComps = ent.split()
-            for nerComp in nerComps:
-              if words[i].text == nerComp:
-                organization = ent
-                break
-          
-        output["arguments"]["2"] = organization
+        # locate it in nerDict
+        organization_2 = findWordInNer(words[i], nerDict)
+                  
+        output["arguments"]["2"] = organization_2
       
       i += 1
-    
-    if len(nerDict['DATE']) == 1:
-      dateList = list(nerDict['DATE'])
-      output["arguments"]["3"] = dateList[0]
+    if 'DATE' in nerDict.keys():
+      if len(nerDict['DATE']) == 1:
+        dateList = list(nerDict['DATE'])
+        output["arguments"]["3"] = dateList[0]
 
     outputJson["extraction"].append(output)
     return outputJson
@@ -312,27 +369,33 @@ Test run (task 2 + task 3)
 """
 
 ##################  Loading corpus #########################
-filename = "amazon.txt"
-#inputs = open(filename, "r")
-#text = inputs.read().decode('utf8')
+#filename = "JPMorganChase.txt"
+filename = input("Type in the filename for testing! >> ")
+inputs = open(filename, "r")
+text = inputs.read()
 
-text = "Amazon was founded by Jeff Bezos in Bellevue, Washington, in July 1994. "
+#text = "Amazon owns Twitch, Zippo, Microsoft and Google."
 #text += "Jeff Bezos founded Amazon in Bellevue, Washington, in July 1994. "
 #text = "Jason was born in Richardson, Texas on Jan 20 1994. "
 #text = "in Bellevue, Washington"
-text += "In 2017, Amazon acquired Whole Foods Market for US$13.4 billion, which vastly increased Amazon's presence as a brick-and-mortar retailer. "
-text += "In 2017, Whole Foods Market was acquired by Amazon for US$13.4 billion."
+#text = "Richardson is a principal city in Dallas and Collin counties in the U.S. state of Texas. "
+#text += "In 2017, Amazon bought Whole Food Market."
+#text= "Dallas is in San Antonio of Texas, U.S."
 
 ##################  Load function for task 1  #################
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 lemmatizer = spacy.load('en_core_web_sm')
-sentences = tokenizer.tokenize(text)
+sent = tokenizer.tokenize(text)
+sentences = list()
+
+for sentence in sent:
+  sentences.append(sentence[:-1])
 
 ##################  Initialize verb set for template 1 and 2  ################
 bornSet = initializeBornVerb()
 buySet = initializeBuyVerb()
-print("Born set:", bornSet)
-print("Buy set:", buySet)
+#print("Born set:", bornSet)
+#print("Buy set:", buySet)
 
 outputJson = {}
 outputJson["document"] = filename
@@ -348,11 +411,50 @@ for sentence in sentences:
     tokens.append(word)
 
   pos_tags = nltk.pos_tag(wordList)  
+  #[to_nltk_tree(sent.root).pretty_print() for sent in words.sents]
+  
+  #### named entity recognition ####
+  named_entity = NER(sentence)
+  #print([(X, X.ent_iob_, X.ent_type_) for X in named_entity])
+  #print([(X.text, X.label_) for X in named_entity.ents])
+
+  nerDict = {}
+  for x in named_entity.ents:
+    if x.label_ not in nerDict.keys():
+      nerDict[x.label_] = set()
+    nerDict[x.label_].add(x.text)
+  #print("Named Entity Set:", nerDict)
+
+  places = GeoText(sentence)
+  cities = set(places.cities)
+
+  #### matching templates ####
+  template1(sentence, words, bornSet, outputJson, nerDict)
+  template2(sentence, words, buySet, outputJson, nerDict)
+
+  ########### Output for task 1  ##############
+  """
+  1. sentence
+  2. tokenize the sentence
+  3. Lemmatizd the words
+  4. POS tag
+  5. Dependency parsing
+  6. hypernymns, hyponyms, meronyms, and holonyms
+  7. Addition feature, ex: named entity recognition
+  8. Geotext information
+  """
+  """print("Sentence:",sentence)
+  
+  for token in tokens:
+    print(token, " : ", token.lemma_, " : ", token.tag_)
+  
+  print("POS tag by nltk:",pos_tags)
+  
   [to_nltk_tree(sent.root).pretty_print() for sent in words.sents]
   
   # Using WordNet, extract hypernymns, hyponyms, meronyms, AND holonyms as features
-  """for word in wordList: 
-    print("Word:"+word+"############################################")   
+  for word in wordList: 
+    print("Word:"+word+" #####################################################")   
     for synset in wn.synsets(word):
       print(synset)
       print("Lemma:\n")
@@ -381,52 +483,329 @@ for sentence in sentences:
         print(mero)
       print("sub mero:\n")
       for mero in synset.substance_meronyms():
-        print(mero)"""
+        print(mero)
   
-  #### named entity recognition ####
-  named_entity = NER(sentence)
-  #print([(X, X.ent_iob_, X.ent_type_) for X in named_entity])
-  #print([(X.text, X.label_) for X in named_entity.ents])
+  print("Named entity:", [(ne.text, ne.label_) for ne in named_entity.ents])
 
-  nerDict = {}
-  for x in named_entity.ents:
-    if x.label_ not in nerDict.keys():
-      nerDict[x.label_] = set()
-    nerDict[x.label_].add(x.text)
-  print("Named Entity Set:", nerDict)
+  print("Cities mentioned(GeoText extraction):", cities)"""
+  Part_Of_Loc(sentence, words, outputJson, nerDict)
+  Part_Of_Org(sentence,words,outputJson,nerDict)
 
-  #### matching templates ####
-  #template1(sentence, words, bornSet, outputJson, nerDict)
-  template2(sentence, words, buySet, outputJson, nerDict)
+print("Result::")
+print('Document',': ',outputJson['document'])
+print('Extraction',': ')
+for item in outputJson['extraction']:
+  print(item)
 
-  ########### Output for task 1  ##############
-  """
-  1. sentence
-  2. tokenize the sentence
-  3. Lemmatizd the words
-  4. POS tag
-  5. Dependency parsing
-  6. hypernymns, hyponyms, meronyms, and holonyms
-  7. Addition feature, ex: named entity recognition
-  """
-  #print(sentence)
-  
-  #for token in tokens:
-    # print(token, " : ", token.lemma_, " : ", token.tag_)
-  
-  #print("POS tag by nltk:",pos_tags)
-  
-  #[to_nltk_tree(sent.root).pretty_print() for sent in words.sents]
-  
-  #
-  
-  #print([(ne.text, ne.label_) for ne in named_entity.ents])
+jsonData = json.dumps(outputJson, indent=4)
+with open('output.json', 'w') as json_file:
+  json.dump(outputJson, json_file, indent=4)
 
-print("Result::", outputJson)
+def Part_Of_Org(sentence, words, outputJson, nerDict):
+
+ #############################################
+ #Merge type#
+ #############################################
+  output = {}
+  output["template"] = "PART_OF"
+  output["sentences"] = sentence
+  output["arguments"] = {}
+  partSet = list()
+  if 'ORG' in nerDict.keys():
+    for syn in wn.synsets("merge"):
+      for l in syn.lemmas():
+        partSet.append(l.name())    
+    partSet.append("form")
+    partSet.append("joint")
+    partSet.append("converge")  
+    parent = list()
+    PartOf = list()
+    for i in range(0,len(words)):
+      if words[i].lemma_ in partSet :
+        
+        if "by" in sentence or "from" in sentence:
+          for j in range(0,i):
+            if words[j].text in nerDict['ORG']:
+              parent.append(words[j].text)
+          for j in range(i+1, len(words)):
+            if words[j].text == "and":
+              for a in range(i+1,j):
+                if words[a].text in nerDict['ORG']:
+                  organization_1 = findWordInNer(words[a], nerDict)
+                  PartOf.append(words[a].text)
+              for a in range(j+1,len(words)):
+                if words[a].text in nerDict['ORG']:
+                  organization_1 = findWordInNer(words[a], nerDict)
+                  PartOf.append(words[a].text)
+        else:
+          for j in range(0,i):
+            if words[j].text == "and":
+              for a in range(0,j):
+                if words[a].text in nerDict['ORG']:
+                  organization_1 = findWordInNer(words[a], nerDict)
+                  PartOf.append(words[a].text)
+              for a in range(j+1,i):
+                if words[a].text in nerDict['ORG']:
+                  organization_1 = findWordInNer(words[a], nerDict)
+                  PartOf.append(words[a].text)
+          for j in range(i+1, len(words)):
+            if words[j].text in nerDict['ORG']:
+              parent.append(words[j].text)
+    for i in parent:
+      for j in PartOf:
+        output["arguments"]["1"] = j
+        output["arguments"]["2"] = i
+        outputJson["extraction"].append(output)
+
+  #############################################
+  #PartOf#
+  #############################################
+    RightPartOf = list()
+    LeftPartOf = list()
+    partOfIndex = -1
+    if sentence.find("part of"):
+      for i in range(0, len(words)):
+        if words[i].text == "of" and words[i-1].text == "part":
+          partOfIndex = i-1
+    if partOfIndex >= 0:
+      for i in nerDict['ORG']:
+        if sentence.find(i) > partOfIndex and i not in RightPartOf:
+          RightPartOf.append(i)
+        if sentence.find(i) < partOfIndex and i not in LeftPartOf:
+          LeftPartOf.append(i)
+      if 'PERSON' in nerDict.keys():    
+        for i in nerDict['PERSON']:
+          if sentence.find(i) > partOfIndex and i not in RightPartOf:
+            RightPartOf.append(i)
+          if sentence.find(i) < partOfIndex and i not in LeftPartOf:
+            LeftPartOf.append(i)
+    for i in LeftPartOf:
+      for j in RightPartOf:
+        output["arguments"]["1"] = j
+        output["arguments"]["2"] = i
+        outputJson["extraction"].append(output)
+      
+  #############################################
+  #subsidiary#
+  #############################################
+    Parent=list()
+    Child=list()
+    Subindex = -1
+    subSet = list()
+    for syn in wn.synsets("subsidiary"):
+      for l in syn.lemmas():
+          subSet.append(l.name())   
+    for i in range(0,len(words)):
+      if words[i].lemma_ in subSet :
+        if sentence.find("of") > sentence.find(words[i].text):
+          for j in range(0,i):
+            if words[j].text in nerDict['ORG']:
+              Child.append(words[j].text)
+          for j in range(i+1, len(words)):
+              if words[j].text in nerDict['ORG']:
+                Parent.append(words[j].text)
+    for i in Parent:
+      for j in Child:
+        output["arguments"]["1"] = j
+        output["arguments"]["2"] = i
+        outputJson["extraction"].append(output)
+  #############################################
+  #own#
+  ############################################# 
+    Parents=list()
+    Childs=list()
+    Ownindex = -1
+    ownSet = list()
+    for syn in wn.synsets("own"):
+      for l in syn.lemmas():
+          ownSet.append(l.name())   
+    for i in range(0,len(words)):
+      if words[i].lemma_ in ownSet :
+        if sentence.find("by") > sentence.find(words[i].text):
+          for j in range(0,i):
+            if words[j].text in nerDict['ORG']:
+              Childs.append(words[j].text)
+          for j in range(i+1, len(words)):
+              if words[j].text in nerDict['ORG']:
+                Parents.append(words[j].text)
+        else:
+          for j in range(0,i):
+            if words[j].text in nerDict['ORG']:
+              Parents.append(words[j].text)
+              continue
+            if words[j].tag_ =="NNP" and words[j].head.text == words[i].text:
+              Parents.append(words[j].text)
+          str = sentence[sentence.find(words[i].text):]
+          lst = str.split(", ")
+          for j in range(0,len(lst)):
+            if lst[j] in nerDict['ORG']:
+              Childs.append(lst[j])
+            if lst[j].find(" ") < 0:
+              for a in range(i, len(words)):
+                if words[a].tag_ == 'NNP' and words[a].text == lst[j]:
+                  
+                  Childs.append(lst[j])
+          for j in range(i+1, len(words)):
+            if words[j].text in nerDict['ORG']:
+              Childs.append(words[j].text)
+            
+    for i in Parents:
+      for j in Childs:
+        output["arguments"]["1"] = j
+        output["arguments"]["2"] = i
+        outputJson["extraction"].append(output)
 
 #Template 3
-place = GeoText("Amazon was founded by Jeff Bezos Richardson, Dallas, Texas, Houston, Katy, in, Bellevue, Washington, in July 1994. ")
-print(place.cities)
+def Part_Of_Loc(sentence, words, outputJson, nerDict):
+  output = {}
+  output["template"] = "PART_OF"
+  output["sentences"] = sentence
+  output["arguments"] = {}
+  found = False
+  same = False;
+  county = False
+  countyName = ""
+  rootVerb = ""
+  rootIs= ""
+  places = GeoText(sentence)
+  cities = set(places.cities)
+  #print(words[3].pos_)
+  partOfIndex = -1
+  LeftPartOf=list()
+  RightPartOf=list()
+  PROPN = list()
+  for i in range(0, len(words)):
+    if words[i].text == "counties" or words[i].text == "county":
+      county = True
+      countyName = words[i-1].text
+  if 'GPE' in nerDict.keys():    
+    if cities == nerDict['GPE'] and len(cities)>1:      
+      same = True
+    elif len(cities) > 1 or len(nerDict['GPE']) > 1:
+        if len(cities) < len(nerDict['GPE']):
+          #print("True")
+          cities = nerDict['GPE']
+    else:
+      return
+  elif len(cities) < 2:
+    return
+  if len(countyName) > 0:
+    cities.add(countyName)
+ #############################################
+ #PartOf#
+ #############################################
+  if sentence.find("part of"):
+    for i in range(0, len(words)):
+      if words[i].text == "of" and words[i-1].text == "part":
+        partOfIndex = i-1
+  if partOfIndex >= 0:
+    for i in cities:
+      if sentence.find(i) > partOfIndex and i not in RightPartOf:
+        RightPartOf.append(i)
+      if sentence.find(i) < partOfIndex and i not in LeftPartOf:
+        LeftPartOf.append(i)
+  for i in RightPartOf:
+    for j in LeftPartOf:
+      output["arguments"]["1"] = j
+      output["arguments"]["2"] = i
+      outputJson["extraction"].append(output)
+      #str = "PART_OF("+j+" , "+i+")"
+      #utputJson.append(str)  
+ #############################################
+ #in#
+ #############################################
+  Inindex = -1
+  LeftIn = list()
+  RightIn = list()
+  for i in range(0, len(words)):
+    if words[i].text == "in" :
+      Inindex = i
+    if Inindex >= 0:
+      for j in cities:
+        if sentence.find(j) > Inindex and j not in RightIn:
+          RightIn.append(j)
+        if sentence.find(j) < Inindex and j not in LeftIn:
+          #print("... ", j, " ..." )
+          LeftIn.append(j)
+
+  if len(LeftIn) > 0 and len(RightIn) > 0:
+    for a in LeftIn:
+      for b in RightIn:
+        output["arguments"]["1"] = a
+        output["arguments"]["2"] = b  
+        outputJson["extraction"].append(output)
+          
+    RightIn = list()
+    LeftIn = list()
+    Inindex = -1
+      
+ #############################################
+ #comma#
+ #############################################
+  lists = sentence.split(", ")
+  for i in range(0,len(lists)):
+    split = lists[i].split(" ")
+    if len(split) > 2:
+      single = split[len(split) -1]
+      double = split[len(split) -2] + " " + split[len(split) - 1]
+      for loc in cities:
+        if loc == single:
+          for j in range (i+1, len(lists)):
+            if lists[j] in cities:
+              output["arguments"]["1"] = single
+              output["arguments"]["2"] = lists[j]
+              outputJson["extraction"].append(output)
+              #print(single, " is in ", lists[j])
+        if loc == double:
+          for j in range (i+1, len(lists)):
+            if lists[j] in cities:
+              output["arguments"]["1"] = double
+              output["arguments"]["2"] = lists[j]
+              outputJson["extraction"].append(output)
+    for loc in cities:
+      if loc == lists[i]:
+        for j in range (i+1, len(lists)):
+          if lists[j] in cities:
+            output["arguments"]["1"] = loc
+            output["arguments"]["2"] = lists[j]
+            outputJson["extraction"].append(output)
+ #############################################
+ #of#
+ #############################################
+  Ofindex = -1
+  LeftOf = list()
+  RightOf = list()
+  for i in range(0, len(words)):
+    if words[i].text == "of" :
+      Ofindex = i
+    if Ofindex >= 0:
+      sum = 0
+      for index in range(0,Ofindex):
+        sum += len(words[index].text)
+      for j in cities:
+        #print("... ",j, "...")
+        if sentence.find(j) > sum and j not in RightOf:
+          RightOf.append(j)
+        if sentence.find(j) < sum and j not in LeftOf:
+          LeftOf.append(j)
+  if len(LeftOf) > 0 and len(RightOf) > 0:
+    for a in LeftOf:
+      for b in RightOf:
+        output["arguments"]["1"] = a
+        output["arguments"]["2"] = b
+        outputJson["extraction"].append(output)
+    RightOf = list()
+    LeftOf = list()
+    Ofindex = -1
+  
+
+  
+  #print(GeoText(text).cities)
+  #print(countyName)
+  #print(list(nerDict['GPE']))
+
+
+#Improvement: Assuming a of b is "a is a part of b"
 
 """# 新增區段
 
