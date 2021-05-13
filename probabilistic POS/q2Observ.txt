@@ -1,0 +1,12 @@
+Janet NNP 0.000032
+will MD 0.308431
+will VB 0.000028
+will NN 0.0002
+back VB 0.000672
+back JJ 0.00034
+back NN 0.000223
+back RB 0.010446
+the NNP 0.000048
+the DT 0.506099
+bill VB 0.000028
+bill NN 0.002337
